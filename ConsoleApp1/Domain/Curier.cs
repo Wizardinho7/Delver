@@ -13,12 +13,10 @@ namespace SimpleCurriersSchedulerStudyApp.Domain
     internal abstract class Curier
     {
         public Company company { get; set; }
-        //private Company company;
-
-
+        
 
         /// <summary>
-        /// Наимеование курьера, например ФИО
+        /// Наименование курьера, например ФИО
         /// </summary>
         public string Name { get; set; }
 
@@ -43,35 +41,240 @@ namespace SimpleCurriersSchedulerStudyApp.Domain
         public double CurrierPrice { get; set; }
 
 
+        /// <summary>
+        /// The start of a workshift.
+        /// </summary>
+        public int WorkshiftStart { get; set; }
+
+        /// <summary>
+        /// The end of a workshift.
+        /// </summary>
+        public int WorkshiftStop { get; set; }
+
+
+
+        /// <summary>
+        /// -1 - not work
+        /// 0 - IDLE
+        /// 1 - wrking))0
+        /// </summary>
+        public int[] TimePlan = new int[100];
+
+        public int[] PossibleTimePlan = new int[100];
+
         public List<PlanningOption>? PossiblePlan { get; set; } = new List<PlanningOption>();
 
 
 
+
+        public int[] CalculateTimePlan(Order order)
+        {
+            int[] result = new int[100];
+            int[] ordTime = new int[100];
+
+
+
+            var ftd = CalculateFullTimeToDeliver(order);
+            if (ftd != null)
+            {
+                ordTime = ftd;
+                Console.WriteLine("CURR:::: FTD not null");
+
+
+
+                for (int i = 0; i < ordTime.Length; i++)
+                {
+                    result[i] += ordTime[i];
+                    Console.Write(result[i]);
+                    if ((PossibleTimePlan[i] + result[i] > 1))
+                    {
+                        Console.WriteLine("CURR::::WEAKDENIAL");
+                        //можно тут разработать метод с решением накладок
+                        return null;
+                    }
+
+                    if (result[i] > 1 || (TimePlan[i] == -1 && ordTime[i] != 0))
+                    {
+                        Console.WriteLine("CURR_CTP::::: bad_time");
+                        return null;
+                    }
+
+                }
+            }
+            else
+            {
+                return null;
+            }
+            
+
+
+            return result;
+        }
+
+        public int CalTime(Location location, Location location1)
+        {
+            var time = location.GetDistance(location1) / Speed;
+            int timee = (int)Math.Round(time);
+            return timee;
+        }
+
+
+        public int[] CalculateOrderTime(Order order)
+        {
+            //CalTime(order.FromLocation,order.ToLocation);
+            //order.DeliveryTime
+
+            int[] res = new int[100];
+            for (int i = order.DeliveryTime; 
+                i > (order.DeliveryTime - CalTime(order.FromLocation, order.ToLocation)); 
+                i--)
+            {
+                if (i < 0)
+                {
+                    UnPlanOrder(order);
+                    return null;
+                }
+                else
+                {
+                    if (TimePlan[i] != 0) // МИССИЯ НЕ ВЫПОЛНИМА(допилить условие потом)
+                    {
+                        UnPlanOrder(order);
+                        return null;
+                    }
+                }
+                res[i] = 1;
+            }
+            return res;
+        }
+
+        public int[] CalculateTimeToReach(Order order)
+        {
+            //CalTime(InitialLocation, order.FromLocation);
+            //(order.DeliveryTime - CalTime(order.FromLocation, order.ToLocation)
+
+            int[] res = new int[100];
+            for (int i = order.DeliveryTime - CalTime(order.FromLocation, order.ToLocation);
+                i > ((order.DeliveryTime - CalTime(order.FromLocation, order.ToLocation)) - CalTime(InitialLocation, order.FromLocation));
+                i--)
+            {
+                if (i < 0)
+                {
+                    Console.WriteLine("CURR_TTR:::: Cantreach");
+                    UnPlanOrder(order);
+                    return null;
+
+                }
+                else
+                {
+                    if (TimePlan[i] != 0) // МИССИЯ НЕ ВЫПОЛНИМА(допилить условие потом)
+                    {
+                        Console.WriteLine("CURR_TTR:::: Cantreach");
+                        UnPlanOrder(order);
+                        return null;
+
+                    }
+
+                }
+                res[i] = 1;
+            }
+            return res;
+
+        }
+
+        public int[] CalculateFullTimeToDeliver(Order order)
+        {
+            int[] ints = new int[100];
+
+            var OT = CalculateOrderTime(order);
+            var TTD = CalculateTimeToReach(order);
+
+            if (TTD != null && OT != null)
+            {
+
+                for (var i = 0; i < TimePlan.Length; i++)
+                {
+                    ints[i] += OT[i] + TTD[i];
+                    
+                    
+                    if (ints[i] > 1)
+                    {
+                        Console.WriteLine("ZOPAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+                    }
+                
+                
+                }
+                return ints;
+            }
+            else
+            {
+                Console.WriteLine("CURR:::::::FTTD NULL");
+
+                return null;
+            }
+
+        }
+
+
         public void LikeAndSubscribe()
         {
-            company.OrderAdded += (sender, args) => { OrderAddedEvent(sender, args); };
+            company.EVENT += (sender, args) => { OrderAddedEvent(sender, args); };
+
+            //init timeline
+            for (int i = 0; i < TimePlan.Length; i++)
+            {
+                if (i <= WorkshiftStart || i >= WorkshiftStop)
+                {
+                    TimePlan[i] = -1;
+                }
+                else
+                {
+                    TimePlan[i] = 0;
+                }
+
+            }
+
+
+
+            Console.WriteLine("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
         }
 
         private void OrderAddedEvent(object? sender, EventArgs e)
         {
-            //Console.WriteLine("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB");
-                        
+            Console.WriteLine("CURIER------------------------------------------" + this.Name);
+            
             PossiblePlan.Clear();
+            PossibleTimePlan = new int[100];
+
 
             // тут должно быть сложное условие принятия заказа, но пока что оно простое(мы свободны)
-            if (ScheduledOrder.Count() == 0) 
+            if (ScheduledOrders.Count() == 0) //todo: Distance culling
             {
+                Console.WriteLine("CURR::::No SCH orders");
 
                 foreach(var order in company.Orders)
                 {
+
+                    Console.WriteLine();
+                    Console.WriteLine("ORDER---" + order.GetInfo());
+
                     if (!(order.IsPlanned) && (order.Weight <= CarryingCapacity) ) 
                     {
-                        PossiblePlan.Add(RequestPlanningOptionAction(order));
+                        Console.WriteLine("CURR:::: ord weight&notplaned");
+                        if (CalculateTimePlan(order) != null)
+                        {
+                            Console.WriteLine("CURR::::Adding possible plan(timeplan!=0), ");
+                            PossiblePlan.Add(RequestPlanningOptionAction(order));
+                            PossibleTimePlan = CalculateTimePlan(order);
+                        }
                     }
                 }
             }
 
+            //CalculateTimePlan();
+
         }
+
+
 
         /// <summary>
         /// Проверяет, может ли курьер выполнить Заказ
@@ -81,7 +284,21 @@ namespace SimpleCurriersSchedulerStudyApp.Domain
         public bool CanCarry(Order order)
         {
             Console.WriteLine("CC: {}" + Name + " /// " + (CarryingCapacity >= order.Weight));
+
+            //TODO: Расчёт грузоподъймности с учётом уже принятых грузов
             return CarryingCapacity >= order.Weight;
+        }
+
+        public void UnPlanOrder(Order order)
+        {
+            foreach(var sch in ScheduledOrders)
+            {
+                if (sch == order)
+                {
+                    ScheduledOrders.Remove(sch);
+                    break;
+                }
+            }
         }
 
         /// <summary>
@@ -103,7 +320,29 @@ namespace SimpleCurriersSchedulerStudyApp.Domain
         /// <param name="planningOption">Вариант размещения заказа в плане курьера</param>        
         internal void AcceptPlanAction(PlanningOption planningOption)
         {
-            ScheduledOrder.AddLast(planningOption.Order);
+            ScheduledOrders.AddLast(planningOption.Order);
+            if (CalculateTimePlan(planningOption.Order) != null)
+            {
+                var temp = CalculateTimePlan(planningOption.Order);
+                for (int i = 0; i < TimePlan.Length; i++)
+                {
+                    if (i <= WorkshiftStart || i >= WorkshiftStop)
+                    {
+                        TimePlan[i] = -1;
+                    }
+                    else
+                    {
+                        TimePlan[i] = temp[i];
+                    }
+
+                }
+
+
+
+                ///TimePlan = CalculateTimePlan(planningOption.Order);
+            }
+            PossibleTimePlan = new int[100];
+            PossiblePlan.Clear();
         }
 
         /// <summary>
@@ -115,7 +354,7 @@ namespace SimpleCurriersSchedulerStudyApp.Domain
         {
             var planningOption = new PlanningOption();
 
-            var currentCurrierLocation =  ScheduledOrder.LastOrDefault()?.ToLocation ?? InitialLocation;
+            var currentCurrierLocation =  ScheduledOrders.LastOrDefault()?.ToLocation ?? InitialLocation;
 
             var distance = currentCurrierLocation.GetDistance(order.FromLocation) + order.OrderDistance;
             var currierCost = distance * this.CurrierPrice;
@@ -124,11 +363,14 @@ namespace SimpleCurriersSchedulerStudyApp.Domain
             planningOption.Order = order;
             planningOption.Price = currierCost;
 
+            Console.WriteLine("REVENUE: " + planningOption.Profit);
+
             return planningOption;
         }
 
+        
 
-        private LinkedList<Order> ScheduledOrder = new LinkedList<Order>();
+        private LinkedList<Order> ScheduledOrders = new LinkedList<Order>();
     }
     /// <summary>
     /// Пеший курьер

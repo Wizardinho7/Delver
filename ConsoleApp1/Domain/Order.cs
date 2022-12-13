@@ -47,6 +47,9 @@ namespace SimpleCurriersSchedulerStudyApp.Domain
             }
         }
 
+        public int DeliveryTime { get; set; }
+
+
         /// <summary>
         /// Текущий вариант исполнения Заказа
         /// </summary>
@@ -73,7 +76,7 @@ namespace SimpleCurriersSchedulerStudyApp.Domain
         public string GetInfo()
         {
             return $"Order {FromLocation.ToString()} -> {ToLocation.ToString()}" +
-                $" ({OrderDistance} km) | {OrderPrice} $$ | {Weight} KG";
+                $" ({OrderDistance} distance units) | {OrderPrice} $$ | {Weight} KG | {DeliveryTime} time";
         }
 
         public void SetPlan(PlanningOption planningOption)
@@ -81,6 +84,10 @@ namespace SimpleCurriersSchedulerStudyApp.Domain
             CurrentPlan = planningOption;
         }
 
+        public void Unplan()
+        {
+            CurrentPlan = null;
+        }
         /*
         /// <summary>
         /// Базовый процесс планирования Заказа

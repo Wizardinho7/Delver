@@ -26,6 +26,27 @@ namespace SimpleCurriersSchedulerStudyApp.Domain
         /// </summary>
         public double Price { get; set; }
 
+        public int StartTime { get; set; }
+
+        public int EndTime { get; set; }
+
+        public double Distance
+        {
+            get
+            {
+                return Order.OrderDistance;
+            }
+        }
+
+        public int StartTimeEstimation
+        {
+            get
+            {
+                //what in God's name is even that logic
+                return (int)Math.Round(EndTime - Order.OrderDistance / Curier.Speed);
+            }
+        }
+
         /// <summary>
         /// Приыбыль
         /// </summary>

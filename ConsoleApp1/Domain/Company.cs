@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 
@@ -13,9 +14,9 @@ namespace SimpleCurriersSchedulerStudyApp.Domain
     internal class Company
     {
         public delegate void EventHandler(object sender, EventArgs args);
-        public event EventHandler OrderAdded = delegate { };
+        public event EventHandler EVENT = delegate { };
 
-
+        
 
         public const double PricePerDistance = 100;
 
@@ -23,6 +24,12 @@ namespace SimpleCurriersSchedulerStudyApp.Domain
 
         public const double DefaultMobileCurierSpeed = 8;
 
+        public double Profit, ProfitPrev = 0;
+
+        /// <summary>
+        /// Magickal model of time, ranging from 0 to 100
+        /// </summary>
+        public int NowTime = 0;
 
         /// <summary>
         /// Курьеры
@@ -80,8 +87,45 @@ namespace SimpleCurriersSchedulerStudyApp.Domain
         public void AddOrder(Order order)
         {
             Orders.Add(order);
-            OrderAdded?.Invoke(this, new EventArgs());
+            Console.WriteLine(order.GetInfo());
+            EVENT?.Invoke(this, new EventArgs());
         }
+        public void AddCurier(Curier curier)
+        {
+            Curiers.Add(curier);
+            Console.WriteLine(curier.GetInfo());
+            EVENT?.Invoke(this, new EventArgs());
+        }
+
+        public void DeleteOrder(Order order)
+        {
+            //rewrite this bs in events someday
+            foreach (var cur in Curiers)
+            {
+                cur.UnPlanOrder(order);
+            }
+
+            Orders.Remove(order);
+            EVENT?.Invoke(this, new EventArgs());
+        }
+        public void DeleteCurier(Curier curier)
+        {
+            //unplanning orders
+            foreach (var ord in Orders)
+            {
+                if (ord.CurrentPlan != null)
+                {
+                    if (ord.CurrentPlan.Curier == curier)
+                    {
+                        ord.Unplan();
+                    }
+                }
+            }
+
+            Curiers.Remove(curier);
+            EVENT?.Invoke(this, new EventArgs());
+        }
+
 
         /// <summary>
         /// Запускает цикл планирования заказов
@@ -91,9 +135,18 @@ namespace SimpleCurriersSchedulerStudyApp.Domain
             //PrepareQueue();
             //PlanningCycle();
 
+            Console.WriteLine("=======PLANNING==PASS=========================");
             GetPlans();
-            AcceptionPass();
-            Console.WriteLine(CalculateProfit());
+
+            Console.WriteLine("=======ACCEPTION==PASS========================");
+            ProfitPrev = Profit;
+            Profit = AcceptionPass();
+
+//            if (CalculateFullProfit() < 0)
+ //           {
+  //              StartPlaner();
+   //         }
+            Console.WriteLine("DeltaProfit ::: " + CalculateFullProfit());
         }
 
         //todo: make it more efficient end less garbage
@@ -113,23 +166,53 @@ namespace SimpleCurriersSchedulerStudyApp.Domain
             //return 2; // what
         }
 
-        public int AcceptionPass()
+        public double AcceptionPass()
         {
             AcceptedPlans.Clear();
+
+            //PrevOpt = AllPossiblePlans.First<PlanningOption>;
+
+            var PrevOpt = new PlanningOption();
+
             foreach (var planOption in AllPossiblePlans)
             {
-                if (planOption.Profit >= 0)
+                //if (planOption.Profit >= 0)
+                if (PrevOpt.Curier == planOption.Curier)
+                {
+                    if (planOption.Profit >= PrevOpt.Profit)
+                    {
+                        planOption.Curier.AcceptPlanAction(planOption);
+                        planOption.Order.SetPlan(planOption);
+                        AcceptedPlans.Add(planOption);
+                    }
+                    else
+                    {
+                        //???????????????????????????????
+                        PrevOpt.Curier.AcceptPlanAction(PrevOpt);
+                        PrevOpt.Order.SetPlan(PrevOpt);
+                        AcceptedPlans.Add(PrevOpt);
+                        //???????????????????????????????
+
+                    }
+
+                }
+                else
                 {
                     planOption.Curier.AcceptPlanAction(planOption);
                     planOption.Order.SetPlan(planOption);
                     AcceptedPlans.Add(planOption);
                 }
+
+
+
+
+                PrevOpt = planOption;
             }
-            return 0; //should be profit but i dont care rn
+            return CalculateStepProfit();
         }
 
 
-        public double CalculateProfit()
+        public double CalculateStepProfit()
         {
             var totalProfit = 0.0;
             foreach (var plan in AcceptedPlans) 
@@ -139,6 +222,23 @@ namespace SimpleCurriersSchedulerStudyApp.Domain
             return totalProfit;
         }
 
+        public double CalculateFullProfit()
+        {
+            var totalProfit = 0.0;
+            foreach (var ord in Orders)
+            {
+                if (ord.CurrentPlan != null)
+                {
+                    totalProfit += ord.CurrentPlan.Profit;
+                }
+            }
+            return totalProfit;
+        }
+
+        public void PingEvent()
+        {
+            EVENT?.Invoke(this, new EventArgs());
+        }
 
         /*
         /// <summary>
